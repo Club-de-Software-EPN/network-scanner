@@ -37,7 +37,6 @@ const Home = (): JSX.Element => {
     setLoadHosts(true);
     ipcRenderer.send('discover-network');
     ipcRenderer.on('discover-network-response', (_, args) => {
-      console.log(args);
       setLoadHosts(false);
       setProgress(0);
       setCurrentHost('');
@@ -45,23 +44,50 @@ const Home = (): JSX.Element => {
   
     ipcRenderer.on('current-data', (_, data) => {
       const parsedData = JSON.parse(data);
-      console.log(parsedData);
       setCurrentHost(parsedData.currentHost);
       setProgress(parsedData.progress);
     });
 
     ipcRenderer.on('host-response', (_, data) => {
       const parsedData = JSON.parse(data);
+      console.log(data);
+      ipcRenderer.send('scan', parsedData.host);
       setHosts((prevHosts) => {
         return [...prevHosts, { ip: parsedData.host, info: []}];
       })
-      ipcRenderer.send('scan', parsedData.host);
       new window.Notification('Host response', { body: `Host ${parsedData.host} is available in your network` });
     })
 
     ipcRenderer.on('scanned-host', (_, data) => {
       const parsedData = JSON.parse(data);
-      console.log(parsedData);
+      // let newHost: host = null;
+      // hosts.map((host) => {
+      //   if (host.ip === parsedData.ip) {
+      //     let isNewPort = true;
+      //     //Is the same host
+      //     host.info.map((info) => {
+      //       if (info.port === parsedData.port) {
+      //         //Is the same port
+      //         isNewPort = false;
+      //       }
+      //     });
+      //     if (isNewPort) {
+      //       newHost = {
+      //         ...host,
+      //         info: [...host.info, {
+      //           port: parsedData.port,
+      //           banner: parsedData.banner,
+      //           status: parsedData.status,
+      //         }]
+      //       }
+      //     }
+      //   }
+      // });
+
+      // if (newHost) {
+      //   setHosts((prevHosts) => [...prevHosts, newHost])
+      // }
+
       setHosts((prevHosts) => {
         const newHosts = prevHosts.map((host) => {
           if (host.ip === parsedData.ip) {
@@ -72,7 +98,7 @@ const Home = (): JSX.Element => {
                 banner: parsedData.banner,
                 status: parsedData.status,
               }]
-          }
+            }
         }
         return host;
       });
