@@ -1,6 +1,7 @@
 import ip from 'ip';
-import ping from 'ping';
-import { BrowserWindow } from 'electron';
+import { IpcMainEvent } from 'electron';
+import { fork, ChildProcess } from 'child_process';
+import path from 'path';
 
 export type NetworkInformation = {
   ipAddress: string;
@@ -16,6 +17,8 @@ export type HostStatus = {
   ports: string[];
 }
 
+const PING_WORKER_PATH = path.resolve(__dirname, 'ping.js');
+const PORT_SCANNER_WORKER_PATH = path.resolve(__dirname, 'portScanner.js');
 class Network {
   private ipAddress: string;
   private netMask: string;
@@ -24,8 +27,14 @@ class Network {
   private firstAddress: string;
   private lastAddress: string;
   private hostsLength: number;
+  private eventHandler: IpcMainEvent;
+  private pingWorker: ChildProcess;
+  private portScannerWorker: ChildProcess;
 
-  constructor(ipAddress= ip.address(), netMask = "255.255.255.0", CIDR= 24) {
+  constructor(eventHandler: IpcMainEvent = null, ipAddress= ip.address(), netMask = "255.255.255.0", CIDR= 24) {
+    this.pingWorker = fork(PING_WORKER_PATH);
+    this.portScannerWorker = fork(PORT_SCANNER_WORKER_PATH);
+    this.eventHandler = eventHandler;
     this.CIDR = CIDR;
     this.ipAddress = ipAddress;
     if (!netMask && CIDR) {
@@ -49,6 +58,10 @@ class Network {
     this.hostsLength = numHosts;
   }
 
+  setEventHandler(eventHandler: IpcMainEvent): void {
+    this.eventHandler = eventHandler;
+  }
+
   getNetworkInformation(): NetworkInformation {
     return {
       ipAddress: this.ipAddress,
@@ -60,38 +73,43 @@ class Network {
     };
   }
 
-  public async pingHost(ipAddress: number): Promise<HostStatus> {
-    let hostStatus: HostStatus = null;
-    const pingResponse = await ping.promise.probe(ip.fromLong(ipAddress));
-    if (pingResponse.alive) {
-      hostStatus = {
-        ipAddress: ip.fromLong(ipAddress),
-        ports: [],
-      };
-    }
-    return hostStatus;
-  }
-
-  async discover (mainWindow: BrowserWindow): Promise<void> {
-    let progress = 1;
-    for (
-      let i = ip.toLong(this.firstAddress);
-      i < ip.toLong(this.lastAddress);
-      i++
-    ) {
-      progress++;
-      mainWindow.webContents.send('current-data', JSON.stringify({
-        currentHost: ip.fromLong(i),
-        progress: progress * 100 / this.hostsLength,
-      }));
-      const res = await ping.promise.probe(ip.fromLong(i));
-      if (res.alive) {
-        mainWindow.webContents.send('host-response', JSON.stringify({
-          host: res.host,
+  discover (): void {
+    this.pingWorker.send({ firstAddress: this.firstAddress, lastAddress: this.lastAddress, hostsLength: this.hostsLength });
+    this.pingWorker.on('message', ({ type, data }: any) => {
+      if ( type === 'INFO' ) {
+        this.eventHandler.reply('current-data', JSON.stringify({
+          currentHost: data.ipAddress,
+          progress: data.progress,
         }));
       }
-    }
-    progress = 0;
+
+      if ( type === 'ALIVE' ) {
+        this.eventHandler.reply('host-response', JSON.stringify({
+          host: data.ipAddress,
+        }));
+      }
+    });
+  }
+
+  scan (ipAddress: string): void {
+    this.portScannerWorker.send({ ipAddress: ipAddress });
+    this.portScannerWorker.on('message', ({data, type}: any) => {
+      if (type === `RESPONSE-${ipAddress}`) {
+        console.log('RESULTADO DE ESCANEO', type , data)
+        this.eventHandler.reply('scanned-host', JSON.stringify(data));
+      }
+    });
+  }
+
+  killChildProcesses(): void {
+    this.pingWorker.kill('SIGINT');
+    this.portScannerWorker.kill('SIGINT');
+  }
+
+  reactiveChildProcesses(): void {
+    this.killChildProcesses();
+    this.pingWorker = fork(PING_WORKER_PATH);
+    this.portScannerWorker = fork(PORT_SCANNER_WORKER_PATH);
   }
 }
 
