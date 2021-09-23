@@ -74,6 +74,12 @@ class Network {
   }
 
   discover (): void {
+    console.log(this.pingWorker)
+    if ( this.pingWorker && this.portScannerWorker || this.pingWorker.killed && this.portScannerWorker.killed) {
+      this.reactiveChildProcesses();
+    }
+    console.log(this.pingWorker)
+
     this.pingWorker.send({ firstAddress: this.firstAddress, lastAddress: this.lastAddress, hostsLength: this.hostsLength });
     this.pingWorker.on('message', ({ type, data }: any) => {
       if ( type === 'INFO' ) {
@@ -95,15 +101,18 @@ class Network {
     this.portScannerWorker.send({ ipAddress: ipAddress });
     this.portScannerWorker.on('message', ({data, type}: any) => {
       if (type === `RESPONSE-${ipAddress}`) {
-        console.log('RESULTADO DE ESCANEO', type , data)
         this.eventHandler.reply('scanned-host', JSON.stringify(data));
       }
     });
   }
 
   killChildProcesses(): void {
-    this.pingWorker.kill('SIGINT');
-    this.portScannerWorker.kill('SIGINT');
+    if (this.pingWorker || this.portScannerWorker) {
+      this.pingWorker.kill('SIGINT');
+      this.portScannerWorker.kill('SIGINT');
+    }
+    delete this.pingWorker;
+    delete this.portScannerWorker;
   }
 
   reactiveChildProcesses(): void {

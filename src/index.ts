@@ -18,8 +18,8 @@ const network = new Network();
 const createWindow = (): void => {
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    height: 600,
-    width: 800,
+    height: 800,
+    width: 1000,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       nodeIntegration: true,
@@ -73,4 +73,5 @@ ipcMain.on('scan', (event: IpcMainEvent, host: string) => {
 ipcMain.on('cancel-scan', () => {
   ipcMain.removeAllListeners('discover-network');
   ipcMain.removeAllListeners('scan');
+  network.killChildProcesses();
 });

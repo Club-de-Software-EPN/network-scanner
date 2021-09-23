@@ -19,7 +19,7 @@ import {
   TableCaption,
   HStack,
 } from '@chakra-ui/react';
-import { host } from '../pages/Home';
+import { host } from '../hooks/useNetworkDiscovery';
 
 type Props = {
   host: host,
@@ -36,7 +36,7 @@ const Host = ({ host }: Props): JSX.Element => {
           <ModalHeader>Host: {host.ip}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <Table>
+            { host.info.length !== 0 ? (<Table>
               <TableCaption>Scanner result</TableCaption>
               <Thead>
                 <Tr>
@@ -55,7 +55,9 @@ const Host = ({ host }: Props): JSX.Element => {
               ))
               }
               </Tbody>
-            </Table>
+            </Table>) : (
+              <Text fontSize="3xl">Ops, there aren't any open port on this host</Text>
+            )}
           </ModalBody>
           <ModalFooter>
             <Button colorScheme="blue" mr={3} onClick={onClose}>
